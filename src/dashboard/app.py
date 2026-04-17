@@ -47,6 +47,19 @@ if df.empty:
     )
     st.stop()
 
+# Defesa contra cache stale do Streamlit Cloud: se o loader devolveu um
+# DataFrame sem as colunas ML novas, instrui o usuário a reiniciar o app.
+_ml_cols = {"nota_estrelas", "preco", "seller_id", "item_id", "url_ml", "comentario"}
+_missing = _ml_cols - set(df.columns)
+if _missing:
+    alert_card(
+        "Cache desatualizado",
+        f"Colunas ausentes: {sorted(_missing)}. No painel do Streamlit Cloud "
+        f"clique em <strong>Manage app → Reboot</strong> para recarregar o código.",
+        level="warning",
+    )
+    st.stop()
+
 # ══════════════════════════════════════════════════════════════════════════════
 # KPIs
 # ══════════════════════════════════════════════════════════════════════════════
