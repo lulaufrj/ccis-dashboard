@@ -14,8 +14,9 @@ venv/
 # Data (nunca commitar dados brutos)
 data/raw/
 data/anonymized/
-data/classified/
-# EXCETO: subset público gerado por scripts/prepare_deploy.py (só registros artesanais)
+# Classified: bloqueia conteúdo, mas deixa passar o deploy JSON
+# (usa /* em vez de / para que a exceção com ! funcione no Git)
+data/classified/*
 !data/classified/classificados_deploy.json
 *.csv
 *.json.gz

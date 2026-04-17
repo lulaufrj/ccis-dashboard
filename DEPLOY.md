@@ -239,12 +239,21 @@ Sempre que os dados forem reprocessados (ou você mexer no código):
 ```bash
 python scripts/prepare_deploy.py          # se reprocessou dados
 git add .
+git status                                # confira se o _deploy.json aparece
 git commit -m "update: descrição curta do que mudou"
 git push
 ```
 
 **Pronto.** O Streamlit Cloud detecta o push e redeploya automaticamente
 em ~30 segundos. A URL continua a mesma.
+
+> **Se `git add .` ignorar o `classificados_deploy.json`** (não aparece em
+> `git status`), use:
+> ```bash
+> git add -f data/classified/classificados_deploy.json
+> ```
+> O `-f` força o add, ignorando o `.gitignore`. Isso acontece em versões
+> antigas do Git por causa da regra `data/classified/*`.
 
 ---
 
