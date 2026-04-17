@@ -24,6 +24,8 @@ from src.dashboard.components.styles import (  # noqa: E402
 st.set_page_config(page_title="CCIS — Análise por Empresas", page_icon="📊", layout="wide")
 inject_css()
 
+_CHART_CFG = {"displayModeBar": False, "responsive": True}
+
 page_header(
     title="Análise por Empresas",
     subtitle=(
@@ -96,30 +98,28 @@ def _alert_cor(label: str) -> str:
     return COLOR_SUCCESS
 
 top["cor"] = top["nivel_alerta"].apply(_alert_cor)
+_top_sorted = top.sort_values("score_risco")
+_max_score  = float(_top_sorted["score_risco"].max() or 1)
 
 fig_rank = go.Figure(go.Bar(
-    y=top.sort_values("score_risco")["empresa"],
-    x=top.sort_values("score_risco")["score_risco"],
+    y=_top_sorted["empresa"],
+    x=_top_sorted["score_risco"],
     orientation="h",
-    marker_color=top.sort_values("score_risco")["cor"],
+    marker_color=_top_sorted["cor"],
     marker_line_width=0,
-    text=top.sort_values("score_risco")["score_risco"].round(1),
+    text=_top_sorted["score_risco"].round(1),
     textfont=dict(size=11, color=TEXT_H),
-    textposition="inside",
-    insidetextanchor="end",
+    textposition="outside",
+    cliponaxis=False,
     opacity=0.93,
 ))
 chart_layout(fig_rank, title="Score de risco por empresa", height=max(280, top_n * 38), show_xgrid=True)
-fig_rank.update_layout(xaxis_title="Score de risco")
+fig_rank.update_layout(
+    xaxis=dict(range=[0, _max_score * 1.35], title="Score de risco"),
+    margin=dict(l=160, r=60, t=50, b=36),
+)
 
-# Legenda manual como annotation
-for label, cor in [("Vermelho ≥15", COLOR_DANGER), ("Amarelo 8–14", COLOR_WARNING), ("Padrão <8", COLOR_SUCCESS)]:
-    fig_rank.add_annotation(
-        xref="paper", yref="paper", x=1, y=1,
-        showarrow=False, font=dict(size=10, color=TEXT_M),
-    )
-
-st.plotly_chart(fig_rank, use_container_width=True)
+st.plotly_chart(fig_rank, use_container_width=True, config=_CHART_CFG)
 
 # ── Drill-down ────────────────────────────────────────────────────────────────
 st.markdown("<div style='height:.5rem'></div>", unsafe_allow_html=True)
@@ -153,7 +153,7 @@ if empresa_sel:
         )
         chart_layout(fig_pie, title="Categorias", height=270)
         fig_pie.update_layout(showlegend=False, margin=dict(l=0, r=0, t=40, b=0))
-        st.plotly_chart(fig_pie, use_container_width=True)
+        st.plotly_chart(fig_pie, use_container_width=True, config=_CHART_CFG)
 
     # Barras por severidade — SEV_PALETTE fixas
     with col_sb:
@@ -170,8 +170,13 @@ if empresa_sel:
             textfont=dict(size=11, color=TEXT_H),
             opacity=0.93,
         ))
-        chart_layout(fig_sev, title="Severidade", height=270)
-        st.plotly_chart(fig_sev, use_container_width=True)
+        _max_sev_n = int(sev_emp["n"].max()) if not sev_emp.empty else 1
+        chart_layout(fig_sev, title="Severidade", height=270, show_xgrid=False)
+        fig_sev.update_layout(
+            xaxis_title=None,
+            yaxis=dict(range=[0, _max_sev_n * 1.3], showgrid=False, showticklabels=False),
+        )
+        st.plotly_chart(fig_sev, use_container_width=True, config=_CHART_CFG)
 
     # Eventos da empresa
     st.markdown(

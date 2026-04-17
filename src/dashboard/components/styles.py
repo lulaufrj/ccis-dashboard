@@ -121,9 +121,10 @@ html, body, [data-testid="stApp"] {{
 }}
 
 /* ── Chrome Streamlit ──────────────────────────────────────────────────────── */
-#MainMenu, footer, [data-testid="stDecoration"], [data-testid="stToolbar"] {{
-    display: none !important;
-}}
+#MainMenu {{ visibility: hidden !important; }}
+footer    {{ visibility: hidden !important; }}
+[data-testid="stDecoration"] {{ display: none !important; }}
+/* NÃO ocultar stToolbar — contém o botão de recolher sidebar */
 
 /* ── Container principal ───────────────────────────────────────────────────── */
 [data-testid="block-container"] {{
@@ -417,16 +418,25 @@ def chart_layout(
 
 
 def bar_single(fig: Any, color: str = CHART_SINGLE) -> Any:
-    """Aplica cor única e remove bordas em barras."""
+    """Aplica cor única e remove bordas em barras.
+
+    Usa textposition='outside' para legibilidade máxima.
+    Lembre de adicionar range com folga no eixo de valor depois de chamar.
+    """
     fig.update_traces(
         marker_color=color,
         marker_line_width=0,
         opacity=0.92,
         textfont=dict(size=11, color=TEXT_H),
-        textposition="inside",
-        insidetextanchor="end",
+        textposition="outside",
+        cliponaxis=False,
     )
     return fig
+
+
+def truncate_labels(series: Any, max_len: int = 42) -> Any:
+    """Trunca strings longas para evitar labels cortados nos eixos."""
+    return series.apply(lambda x: (str(x)[:max_len] + "…") if len(str(x)) > max_len else str(x))
 
 
 def bar_sev(fig: Any) -> Any:
