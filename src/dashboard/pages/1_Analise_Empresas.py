@@ -27,10 +27,10 @@ inject_css()
 _CHART_CFG = {"displayModeBar": False, "responsive": True}
 
 page_header(
-    title="Análise por Empresas",
+    title="Análise por Vendedores",
     subtitle=(
-        "Score de risco = Σ(peso × severidade)  ·  "
-        "Pesos: Segurança 5 · Eficácia 3 · Qualidade 2 · Comercial 0"
+        "Ranking de vendedores/marcas artesanais no Mercado Livre  ·  "
+        "Score = Σ(peso × severidade) · Pesos: Segurança 5 · Eficácia 3 · Qualidade 2 · Comercial 0"
     ),
     icon="📊",
 )
@@ -51,12 +51,12 @@ c1, c2, c3, c4 = st.columns(4)
 c1.metric("Alerta Vermelho  ≥15",  f"{n_verm}")
 c2.metric("Alerta Amarelo  8–14",  f"{n_amar}")
 c3.metric("Padrão  <8",            f"{n_pad}")
-c4.metric("Empresas monitoradas",  f"{len(scores)}")
+c4.metric("Vendedores monitorados", f"{len(scores)}")
 
 st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
 
 # ── Tabela de ranking ─────────────────────────────────────────────────────────
-section_header("Ranking de risco", "Todas as empresas ordenadas por score composto")
+section_header("Ranking de risco", "Todos os vendedores ordenados por score composto")
 
 st.dataframe(
     scores[[
@@ -64,8 +64,8 @@ st.dataframe(
         "severidade_maxima", "reclamacoes_sev5", "reclamacoes_sev4",
         "score_risco", "nivel_alerta",
     ]].rename(columns={
-        "empresa":           "Empresa",
-        "total_reclamacoes": "Reclamações",
+        "empresa":           "Vendedor",
+        "total_reclamacoes": "Avaliações",
         "severidade_media":  "Sev. Média",
         "severidade_maxima": "Sev. Máx.",
         "reclamacoes_sev5":  "Críticas (5)",
@@ -87,7 +87,7 @@ st.dataframe(
 
 # ── Gráfico horizontal de ranking ─────────────────────────────────────────────
 st.markdown("<div style='height:.5rem'></div>", unsafe_allow_html=True)
-section_header("Top empresas por score", "Colorido por nível de alerta")
+section_header("Top vendedores por score", "Colorido por nível de alerta")
 
 top_n = min(12, len(scores))
 top   = scores.head(top_n).copy()
@@ -113,7 +113,7 @@ fig_rank = go.Figure(go.Bar(
     cliponaxis=False,
     opacity=0.93,
 ))
-chart_layout(fig_rank, title="Score de risco por empresa", height=max(280, top_n * 38), show_xgrid=True)
+chart_layout(fig_rank, title="Score de risco por vendedor", height=max(280, top_n * 38), show_xgrid=True)
 fig_rank.update_layout(
     xaxis=dict(range=[0, _max_score * 1.35], title="Score de risco"),
     margin=dict(l=160, r=60, t=50, b=36),
@@ -123,19 +123,20 @@ st.plotly_chart(fig_rank, use_container_width=True, config=_CHART_CFG)
 
 # ── Drill-down ────────────────────────────────────────────────────────────────
 st.markdown("<div style='height:.5rem'></div>", unsafe_allow_html=True)
-section_header("Drill-down por empresa", "Detalhamento completo de uma empresa")
+section_header("Drill-down por vendedor", "Detalhamento completo de um vendedor")
 
 empresas_list = sorted(df["empresa"].dropna().unique().tolist())
-empresa_sel   = st.selectbox("Selecione a empresa:", empresas_list, label_visibility="collapsed")
+empresa_sel   = st.selectbox("Selecione o vendedor:", empresas_list, label_visibility="collapsed")
 
 if empresa_sel:
     df_emp = df[df["empresa"] == empresa_sel]
 
-    ca, cb, cc, cd = st.columns(4)
-    ca.metric("Reclamações",    len(df_emp))
-    cb.metric("Sev. Média",     f"{df_emp['severidade'].mean():.2f}")
-    cc.metric("Sev. Máxima",    int(df_emp["severidade"].max()))
-    cd.metric("Score total",    f"{df_emp['score_individual'].sum():.1f}")
+    ca, cb, cc, cd, ce = st.columns(5)
+    ca.metric("Avaliações",    len(df_emp))
+    cb.metric("Nota média",    f"{df_emp['nota_estrelas'].dropna().mean():.2f} ★" if df_emp["nota_estrelas"].notna().any() else "—")
+    cc.metric("Sev. Média",    f"{df_emp['severidade'].mean():.2f}")
+    cd.metric("Sev. Máxima",   int(df_emp["severidade"].max()))
+    ce.metric("Score total",   f"{df_emp['score_individual'].sum():.1f}")
 
     col_pie, col_sb = st.columns(2)
 

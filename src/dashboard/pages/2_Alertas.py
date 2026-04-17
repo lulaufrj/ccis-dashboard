@@ -24,8 +24,8 @@ inject_css()
 page_header(
     title="Central de Alertas",
     subtitle=(
-        "Severidade 4 = reação adversa (ALERTA)  ·  "
-        "Severidade 5 = dano à saúde (ALERTA URGENTE)"
+        "Vendedores e produtos artesanais com avaliações de risco no Mercado Livre  ·  "
+        "Sev 4 = reação adversa · Sev 5 = dano à saúde (URGENTE)"
     ),
     icon="🚨",
 )
@@ -55,14 +55,14 @@ st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
 section_header("Alerta Vermelho — score ≥ 15", "Monitoramento imediato recomendado")
 
 if vermelhos.empty:
-    alert_card("Nenhuma empresa em alerta vermelho", "Todas com score abaixo de 15.", level="success")
+    alert_card("Nenhum vendedor em alerta vermelho", "Todos com score abaixo de 15.", level="success")
 else:
     for _, r in vermelhos.iterrows():
         alert_card(
             title=r["empresa"],
             body=(
                 f"Score: <strong>{r['score_risco']:.1f}</strong>  ·  "
-                f"{int(r['total_reclamacoes'])} reclamações  ·  "
+                f"{int(r['total_reclamacoes'])} avaliações  ·  "
                 f"Severidade máxima: {int(r['severidade_maxima'])}  ·  "
                 f"Críticas (5): {int(r['reclamacoes_sev5'])}  ·  "
                 f"Altas (≥4): {int(r['reclamacoes_sev4'])}"
@@ -74,14 +74,14 @@ st.markdown("<div style='height:.5rem'></div>", unsafe_allow_html=True)
 section_header("Alerta Amarelo — score 8–14", "Monitoramento ativo")
 
 if amarelos.empty:
-    alert_card("Nenhuma empresa em alerta amarelo", "Não há empresas com score entre 8 e 14.", level="success")
+    alert_card("Nenhum vendedor em alerta amarelo", "Não há vendedores com score entre 8 e 14.", level="success")
 else:
     for _, r in amarelos.iterrows():
         alert_card(
             title=r["empresa"],
             body=(
                 f"Score: <strong>{r['score_risco']:.1f}</strong>  ·  "
-                f"{int(r['total_reclamacoes'])} reclamações  ·  "
+                f"{int(r['total_reclamacoes'])} avaliações  ·  "
                 f"Severidade máxima: {int(r['severidade_maxima'])}"
             ),
             level="warning",
@@ -89,7 +89,7 @@ else:
 
 # ── Recorrência ───────────────────────────────────────────────────────────────
 st.markdown("<div style='height:.5rem'></div>", unsafe_allow_html=True)
-section_header("Recorrência em segurança grave", "Empresas com 2 ou mais eventos de Segurança sev ≥ 4")
+section_header("Recorrência em segurança grave", "Vendedores com 2 ou mais avaliações de Segurança sev ≥ 4")
 
 if not seguranca_grave.empty:
     rec = (
@@ -107,13 +107,13 @@ if not seguranca_grave.empty:
     if not multiplos.empty:
         st.dataframe(
             multiplos.rename(columns={
-                "empresa": "Empresa", "total": "Eventos graves",
+                "empresa": "Vendedor", "total": "Avaliações graves",
                 "sev_max": "Sev. Máx.", "produtos": "Produtos",
             }),
             use_container_width=True, hide_index=True,
         )
     else:
-        alert_card("Sem recorrência grave", "Nenhuma empresa com 2+ eventos graves.", level="success")
+        alert_card("Sem recorrência grave", "Nenhum vendedor com 2+ avaliações graves.", level="success")
 
 # ── Casos críticos (sev 5) ────────────────────────────────────────────────────
 st.markdown("<div style='height:.5rem'></div>", unsafe_allow_html=True)

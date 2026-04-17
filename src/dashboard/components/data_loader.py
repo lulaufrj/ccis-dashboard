@@ -176,13 +176,6 @@ def load_classificados() -> pd.DataFrame:
     with open(path, encoding="utf-8") as f:
         raw: list[dict[str, Any]] = json.load(f)
 
-    # Fontes admitidas no dashboard — apenas cosméticos artesanais.
-    # - mercadolivre: já filtrado no ingestor por categoria + palavras-chave
-    # - dou_anvisa: atos regulatórios (contexto de vigilância)
-    # Consumidor.gov.br é excluído por ser majoritariamente composto de
-    # reclamações sobre grandes marcas industriais, fora do escopo artesanal.
-    FONTES_ARTESANAIS = {"mercadolivre", "dou_anvisa"}
-
     rows: list[dict[str, Any]] = []
     skipped_industrial = 0
     skipped_fonte = 0
@@ -191,54 +184,34 @@ def load_classificados() -> pd.DataFrame:
         texto = rec.get("texto_anonimizado") or ""
         fonte = rec.get("fonte") or ""
 
-        # Filtro de fonte (foco artesanal)
-        if fonte not in FONTES_ARTESANAIS:
+        # Dashboard é exclusivamente Mercado Livre (cosméticos artesanais)
+        if fonte != "mercadolivre":
             skipped_fonte += 1
             continue
 
-        # Extração de empresa: múltiplas estratégias por fonte
-        empresa = (
-            rec.get("empresa")
-            or _extract_field_from_text(texto, "Empresa")
-            or _extract_empresa_from_dou(texto)
-        )
-
-        # Filtro: excluir empresas industriais, mas SEMPRE manter registros DOU
-        if fonte != "dou_anvisa" and _is_industrial(empresa):
+        empresa = rec.get("empresa")
+        if _is_industrial(empresa):
             skipped_industrial += 1
             continue
 
-        # Campos específicos de Consumidor.gov.br
-        grupo_problema = _extract_field_from_text(texto, "Grupo do problema")
-        problema = _extract_field_from_text(texto, "Problema")
-        canal = _extract_field_from_text(texto, "Canal")
-        area = _extract_field_from_text(texto, "Área")
+        # Extrai comentário do consumidor do texto enriquecido
+        comentario = None
+        if texto:
+            m = re.search(
+                r"Coment[áa]rio do consumidor:\s*(.+?)(?:\s*\|\s*\w[^:]+:|$)",
+                texto, re.DOTALL,
+            )
+            if m:
+                comentario = m.group(1).strip()
 
-        # Campos específicos de DOU / Anvisa
-        tipo_ato = _extract_field_from_text(texto, "Tipo de ato")
-        orgao_emissor_full = _extract_field_from_text(texto, "Órgão emissor")
-        orgao_emissor = _shorten_orgao(orgao_emissor_full)
-        acao_regulatoria = _extract_field_from_text(
-            texto, "Ação regulatória identificada"
-        )
-        titulo_publicacao = _extract_field_from_text(texto, "Título da publicação")
-        empresas_dou = _extract_empresas_from_dou(texto) if fonte == "dou_anvisa" else []
+        produto = rec.get("assunto") or _extract_field_from_text(texto, "Produto")
+        item_id = rec.get("_ml_item_id") or ""
+        url_ml = ""
+        if item_id.startswith("MLB"):
+            url_ml = f"https://produto.mercadolivre.com.br/MLB-{item_id[3:]}"
 
-        # Extração de produto
-        produto = (
-            _extract_field_from_text(texto, "Produto")
-            or tipo_ato
-        )
-        tipo_evento = (
-            _extract_field_from_text(texto, "Tipo")
-            or acao_regulatoria
-        )
-
-        # Descrição curta do evento para listagens
-        if fonte == "dou_anvisa":
-            resumo = acao_regulatoria or tipo_ato or "Ato regulatório Anvisa"
-        else:
-            resumo = problema or grupo_problema or "Reclamação"
+        nota = rec.get("_ml_nota")
+        preco = rec.get("_ml_preco")
 
         rows.append(
             {
@@ -247,21 +220,19 @@ def load_classificados() -> pd.DataFrame:
                 "data_reclamacao": rec.get("data_reclamacao"),
                 "empresa": empresa or "Não informada",
                 "produto": produto or "Não informado",
-                "tipo_evento": tipo_evento,
-                "resumo": resumo,
-                # Consumidor.gov
-                "grupo_problema": grupo_problema,
-                "problema": problema,
-                "canal": canal,
-                "area": area,
+                "comentario": comentario or "",
+                "resumo": (comentario[:80] + "…") if comentario and len(comentario) > 80 else (comentario or "Sem comentário"),
+                # Mercado Livre
+                "nota_estrelas": int(nota) if nota is not None else None,
+                "preco": float(preco) if preco is not None else None,
+                "item_id": item_id,
+                "url_ml": url_ml,
+                "seller_id": rec.get("_ml_seller_id"),
+                "seller_nivel": rec.get("_ml_seller_nivel"),
+                "seller_status": rec.get("_ml_seller_status"),
+                "seller_vendas": rec.get("_ml_seller_vendas"),
+                "categoria_ml": rec.get("_ml_categoria"),
                 "segmento": rec.get("segmento"),
-                "assunto": rec.get("assunto"),
-                # DOU Anvisa
-                "tipo_ato": tipo_ato,
-                "orgao_emissor": orgao_emissor,
-                "acao_regulatoria": acao_regulatoria,
-                "titulo_publicacao": titulo_publicacao,
-                "empresas_dou": empresas_dou,
                 # Classificação
                 "texto": texto,
                 "categoria": cls.get("categoria", "Desconhecida"),
