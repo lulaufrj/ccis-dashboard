@@ -1,0 +1,63 @@
+# Empresas industriais / grandes marcas a serem EXCLUÍDAS da análise.
+# O foco do CCIS é cosméticos ARTESANAIS.
+# Uma empresa por linha. Linhas com # são ignoradas.
+# A comparação é case-insensitive e por substring (ex: "Natura" exclui "Natura" e "Natura Cosméticos").
+#
+# Para adicionar/remover empresas, edite este arquivo diretamente.
+
+# === Grandes grupos brasileiros ===
+Natura
+Avon
+O Boticário
+Boticário
+Interbelle
+Eudora
+Jequiti
+quem disse, berenice
+
+# === Multinacionais ===
+L'Oréal
+Loréal
+LOréal
+oréal
+oreal
+Procter & Gamble
+P&G
+The Body Shop
+Unilever
+Nivea
+Dove
+Johnson & Johnson
+Colgate-Palmolive
+OUi Paris
+Idéli
+
+# === Marcas industriais brasileiras ===
+Vult
+Salon Line
+Skala
+Risqué
+Haskell
+Bio Extratus
+Inoar
+Cadiveu
+Wella
+Braé
+
+# === E-commerce / Varejistas (não fabricam) ===
+Beleza na Web
+Época Cosméticos
+Beautybox
+The Beauty Box
+Sephora
+Renner
+Riachuelo
+Perfu.me
+
+# === Farmácias / Drogarias ===
+Drogasil
+Raia
+Droga Raia
+Panvel
+Pague Menos
+Drogaria São Paulo

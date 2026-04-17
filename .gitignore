@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Environment
+.env
+.venv/
+venv/
+
+# Data (nunca commitar dados brutos)
+data/raw/
+data/anonymized/
+data/classified/
+# EXCETO: subset público gerado por scripts/prepare_deploy.py (só registros artesanais)
+!data/classified/classificados_deploy.json
+*.csv
+*.json.gz
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+docker/.env.docker
+
+# Airflow
+airflow.db
+airflow-webserver.pid
+logs/
+
+# Pytest
+.pytest_cache/
+htmlcov/
+.coverage
