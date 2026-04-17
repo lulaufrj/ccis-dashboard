@@ -1,402 +1,440 @@
-"""Design system premium para o dashboard CCIS.
+"""Design system CCIS — tokens, CSS e helpers de gráfico.
 
-Injeta CSS global e expõe helpers para componentes HTML e temas Plotly.
-Todas as páginas chamam `inject_css()` logo após `st.set_page_config()`.
+REGRAS INVIOLÁVEIS DE COR:
+  1. Gráficos de barra neutros (rankings, grupos)  → CHART_SINGLE (#6366F1)
+  2. Escala de severidade (1–5)                    → SEV_PALETTE (verde→vermelho)
+  3. Categorias de reclamação                      → CAT_COLORS  (4 cores fixas)
+  4. Níveis de alerta                              → ALERT_COLORS (3 cores fixas)
+  5. Heatmaps                                      → sequencial indigo CHART_SEQ
+  PROIBIDO: color_continuous_scale em barras, arco-íris, cores ad-hoc por arquivo.
 """
 
 from __future__ import annotations
+
 from typing import Any
+
 import streamlit as st
 
-# ─── Paleta de cores ──────────────────────────────────────────────────────────
-COLORS = {
-    "bg":        "#F0F4FF",
-    "card":      "#FFFFFF",
-    "border":    "#E2E8F0",
-    "sidebar":   "#0F172A",
-    "primary":   "#6366F1",   # indigo
-    "primary_d": "#4F46E5",
-    "danger":    "#EF4444",
-    "warning":   "#F97316",
-    "success":   "#10B981",
-    "info":      "#3B82F6",
-    "text":      "#1E293B",
-    "muted":     "#64748B",
-    "seguranca": "#EF4444",
-    "qualidade": "#F97316",
-    "eficacia":  "#3B82F6",
-    "comercial": "#94A3B8",
+# ── Tokens de cor ─────────────────────────────────────────────────────────────
+
+# Fundo e superfície
+BG_PAGE  = "#F8FAFC"      # fundo da página
+BG_CARD  = "#FFFFFF"      # fundo de cartões
+BORDER   = "#E2E8F0"      # bordas leves
+BORDER_M = "#CBD5E1"      # bordas médias
+
+# Texto
+TEXT_H   = "#0F172A"      # títulos
+TEXT_B   = "#334155"      # corpo
+TEXT_M   = "#64748B"      # legendas e labels
+TEXT_L   = "#94A3B8"      # desabilitado/placeholder
+
+# Marca (Indigo)
+INDIGO_50  = "#EEF2FF"
+INDIGO_100 = "#E0E7FF"
+INDIGO_300 = "#A5B4FC"
+INDIGO_500 = "#6366F1"    # primária
+INDIGO_600 = "#4F46E5"
+INDIGO_700 = "#4338CA"
+
+# Semântico
+COLOR_DANGER  = "#EF4444"
+COLOR_WARNING = "#F59E0B"
+COLOR_SUCCESS = "#10B981"
+COLOR_INFO    = INDIGO_500
+
+# Sidebar
+SIDEBAR_TOP = "#1E293B"
+SIDEBAR_BOT = "#0F172A"
+
+# ── Tokens de gráfico ─────────────────────────────────────────────────────────
+
+# 1. Cor única para barras neutras (rankings, contagens simples)
+CHART_SINGLE = INDIGO_500
+
+# 2. Sequencial monocromático Indigo para heatmaps e barras intensidade
+CHART_SEQ = [[0.0, INDIGO_50], [1.0, INDIGO_700]]
+
+# 3. Escala de severidade 1→5 (verde→amarelo→vermelho) — SEMPRE estas 5 cores
+SEV_PALETTE: dict[int, str] = {
+    1: "#10B981",   # verde   · informativo
+    2: "#84CC16",   # lime    · baixo
+    3: "#F59E0B",   # âmbar   · médio
+    4: "#F97316",   # laranja · alto
+    5: "#EF4444",   # vermelho· crítico
+}
+SEV_LABELS: dict[int, str] = {
+    1: "1 · Info",
+    2: "2 · Baixo",
+    3: "3 · Médio",
+    4: "4 · Alto",
+    5: "5 · Crítico",
 }
 
-_CSS = """
+# 4. Categorias — 4 cores fixas, NUNCA misturar com severidade
+CAT_COLORS: dict[str, str] = {
+    "Segurança":    COLOR_DANGER,
+    "Qualidade":    COLOR_WARNING,
+    "Eficácia":     INDIGO_500,
+    "Comercial":    TEXT_L,
+    "Desconhecida": BORDER,
+}
+
+# 5. Alertas de risco — separados de severidade
+ALERT_COLORS: dict[str, str] = {
+    "vermelho": COLOR_DANGER,
+    "amarelo":  COLOR_WARNING,
+    "padrao":   COLOR_SUCCESS,
+}
+
+# Compatibilidade com data_loader
+COLORS = {
+    "primary":   INDIGO_500,
+    "danger":    COLOR_DANGER,
+    "warning":   COLOR_WARNING,
+    "success":   COLOR_SUCCESS,
+    "info":      COLOR_INFO,
+    "seguranca": COLOR_DANGER,
+    "qualidade": COLOR_WARNING,
+    "eficacia":  INDIGO_500,
+    "comercial": TEXT_L,
+    "bg":        BG_PAGE,
+    "card":      BG_CARD,
+    "border":    BORDER,
+    "sidebar":   SIDEBAR_BOT,
+    "text":      TEXT_H,
+    "muted":     TEXT_M,
+    "primary_d": INDIGO_600,
+}
+
+# ── CSS global ────────────────────────────────────────────────────────────────
+
+_CSS = f"""
 <style>
-/* ── Google Fonts ─────────────────────────────────────────────────────────── */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
-/* ── Reset & Base ─────────────────────────────────────────────────────────── */
-html, body, [data-testid="stApp"] {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
-    background-color: #F0F4FF !important;
-}
-* { box-sizing: border-box; }
+/* ── Base ──────────────────────────────────────────────────────────────────── */
+html, body, [data-testid="stApp"] {{
+    font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
+    background-color: {BG_PAGE} !important;
+    color: {TEXT_B} !important;
+}}
 
-/* ── Esconde chrome desnecessário ─────────────────────────────────────────── */
-#MainMenu { visibility: hidden; }
-footer    { visibility: hidden; }
-[data-testid="stDecoration"] { display: none !important; }
-[data-testid="stToolbar"]    { display: none !important; }
+/* ── Chrome Streamlit ──────────────────────────────────────────────────────── */
+#MainMenu, footer, [data-testid="stDecoration"], [data-testid="stToolbar"] {{
+    display: none !important;
+}}
 
-/* ── Sidebar escura premium ───────────────────────────────────────────────── */
-section[data-testid="stSidebar"] {
-    background: linear-gradient(180deg, #1E293B 0%, #0F172A 100%) !important;
-    border-right: 1px solid #1E293B !important;
-}
-section[data-testid="stSidebar"] * {
+/* ── Container principal ───────────────────────────────────────────────────── */
+[data-testid="block-container"] {{
+    padding: 1.75rem 2.5rem 3rem !important;
+    max-width: 1440px !important;
+}}
+
+/* ── Sidebar ───────────────────────────────────────────────────────────────── */
+section[data-testid="stSidebar"] {{
+    background: linear-gradient(180deg, {SIDEBAR_TOP} 0%, {SIDEBAR_BOT} 100%) !important;
+    border-right: 1px solid rgba(255,255,255,0.06) !important;
+}}
+section[data-testid="stSidebar"] * {{
     color: #CBD5E1 !important;
-}
+}}
 section[data-testid="stSidebar"] h1,
 section[data-testid="stSidebar"] h2,
-section[data-testid="stSidebar"] h3 {
+section[data-testid="stSidebar"] h3 {{
     color: #F1F5F9 !important;
     font-weight: 700 !important;
-}
-/* Nav links ativos */
-section[data-testid="stSidebar"] [aria-selected="true"] {
-    background: rgba(99,102,241,0.25) !important;
-    border-left: 3px solid #6366F1 !important;
+}}
+section[data-testid="stSidebar"] [aria-selected="true"] {{
+    background: rgba(99,102,241,0.18) !important;
     border-radius: 8px !important;
-}
-section[data-testid="stSidebar"] a { color: #94A3B8 !important; }
-section[data-testid="stSidebar"] a:hover { color: #F1F5F9 !important; }
+    border-left: 3px solid {INDIGO_500} !important;
+}}
 
-/* ── Container principal ──────────────────────────────────────────────────── */
-[data-testid="block-container"] {
-    padding-top: 1.5rem !important;
-    padding-left: 2rem !important;
-    padding-right: 2rem !important;
-    max-width: 1440px !important;
-}
-
-/* ── Metric cards ─────────────────────────────────────────────────────────── */
-[data-testid="stMetric"] {
-    background: #FFFFFF !important;
-    border-radius: 14px !important;
-    padding: 1.25rem 1.5rem !important;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04) !important;
-    border: 1px solid #E2E8F0 !important;
-    transition: box-shadow 0.2s ease !important;
-}
-[data-testid="stMetric"]:hover {
-    box-shadow: 0 4px 12px rgba(99,102,241,0.12) !important;
-}
-[data-testid="stMetricLabel"] > div {
-    font-size: 0.7rem !important;
+/* ── Metric cards ──────────────────────────────────────────────────────────── */
+[data-testid="stMetric"] {{
+    background: {BG_CARD} !important;
+    border-radius: 12px !important;
+    padding: 1.1rem 1.4rem 1.2rem !important;
+    border: 1px solid {BORDER} !important;
+    box-shadow: 0 1px 2px rgba(15,23,42,0.04) !important;
+    transition: box-shadow .18s ease !important;
+}}
+[data-testid="stMetric"]:hover {{
+    box-shadow: 0 3px 10px rgba(99,102,241,0.10) !important;
+}}
+[data-testid="stMetricLabel"] > div {{
+    font-size: 0.68rem !important;
     font-weight: 700 !important;
     text-transform: uppercase !important;
-    letter-spacing: 0.08em !important;
-    color: #64748B !important;
-}
-[data-testid="stMetricValue"] {
-    font-size: 2.1rem !important;
+    letter-spacing: 0.09em !important;
+    color: {TEXT_M} !important;
+}}
+[data-testid="stMetricValue"] {{
+    font-size: 1.9rem !important;
     font-weight: 800 !important;
-    color: #1E293B !important;
-    line-height: 1.1 !important;
-}
-[data-testid="stMetricDelta"] { font-size: 0.78rem !important; font-weight: 600 !important; }
-
-/* ── Expanders premium ────────────────────────────────────────────────────── */
-[data-testid="stExpander"] {
-    background: #FFFFFF !important;
-    border: 1px solid #E2E8F0 !important;
-    border-radius: 12px !important;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.04) !important;
-    margin-bottom: 8px !important;
-    overflow: hidden !important;
-    transition: box-shadow 0.2s ease !important;
-}
-[data-testid="stExpander"]:hover {
-    box-shadow: 0 4px 12px rgba(0,0,0,0.08) !important;
-}
-[data-testid="stExpander"] > details > summary {
-    padding: 0.9rem 1.25rem !important;
+    color: {TEXT_H} !important;
+    line-height: 1.15 !important;
+    letter-spacing: -0.02em !important;
+}}
+[data-testid="stMetricDelta"] {{
+    font-size: 0.76rem !important;
     font-weight: 600 !important;
-    font-size: 0.88rem !important;
-    color: #1E293B !important;
-    cursor: pointer !important;
-}
-[data-testid="stExpander"] > details > summary:hover {
-    background: #F8FAFF !important;
-}
+}}
 
-/* ── Gráficos Plotly ──────────────────────────────────────────────────────── */
-[data-testid="stPlotlyChart"] {
-    background: #FFFFFF !important;
-    border-radius: 14px !important;
-    padding: 1rem !important;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.06) !important;
-    border: 1px solid #E2E8F0 !important;
-}
-
-/* ── DataFrames ───────────────────────────────────────────────────────────── */
-[data-testid="stDataFrame"] {
-    border-radius: 12px !important;
+/* ── Expanders ─────────────────────────────────────────────────────────────── */
+[data-testid="stExpander"] {{
+    background: {BG_CARD} !important;
+    border: 1px solid {BORDER} !important;
+    border-radius: 10px !important;
+    box-shadow: 0 1px 2px rgba(15,23,42,0.04) !important;
+    margin-bottom: 6px !important;
     overflow: hidden !important;
-    border: 1px solid #E2E8F0 !important;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.04) !important;
-}
+    transition: box-shadow .18s ease !important;
+}}
+[data-testid="stExpander"]:hover {{
+    box-shadow: 0 3px 8px rgba(15,23,42,0.08) !important;
+    border-color: {BORDER_M} !important;
+}}
+[data-testid="stExpander"] > details > summary {{
+    padding: 0.85rem 1.1rem !important;
+    font-weight: 600 !important;
+    font-size: 0.84rem !important;
+    color: {TEXT_H} !important;
+}}
+[data-testid="stExpander"] > details > summary:hover {{
+    background: #F8FAFC !important;
+}}
 
-/* ── Alertas / Info boxes ─────────────────────────────────────────────────── */
-[data-testid="stAlert"] {
+/* ── Gráficos ──────────────────────────────────────────────────────────────── */
+[data-testid="stPlotlyChart"] {{
+    background: {BG_CARD} !important;
+    border-radius: 12px !important;
+    padding: 0.25rem 0.5rem !important;
+    border: 1px solid {BORDER} !important;
+    box-shadow: 0 1px 2px rgba(15,23,42,0.04) !important;
+}}
+
+/* ── DataFrames ────────────────────────────────────────────────────────────── */
+[data-testid="stDataFrame"] {{
+    border: 1px solid {BORDER} !important;
+    border-radius: 10px !important;
+    overflow: hidden !important;
+    box-shadow: 0 1px 2px rgba(15,23,42,0.04) !important;
+}}
+
+/* ── Alertas nativos ───────────────────────────────────────────────────────── */
+[data-testid="stAlert"] {{
     border-radius: 10px !important;
     border-left-width: 4px !important;
-    font-size: 0.88rem !important;
-}
+    font-size: 0.84rem !important;
+}}
 
-/* ── Divisores ────────────────────────────────────────────────────────────── */
-hr {
+/* ── Divisores ─────────────────────────────────────────────────────────────── */
+hr {{
     border: none !important;
-    border-top: 1px solid #E2E8F0 !important;
-    margin: 2rem 0 !important;
-}
+    border-top: 1px solid {BORDER} !important;
+    margin: 1.75rem 0 !important;
+}}
 
-/* ── Botões ───────────────────────────────────────────────────────────────── */
-.stButton > button {
-    background: linear-gradient(135deg, #6366F1, #4F46E5) !important;
-    color: #FFFFFF !important;
+/* ── Botões ────────────────────────────────────────────────────────────────── */
+.stButton > button {{
+    background: {INDIGO_500} !important;
+    color: #fff !important;
     border: none !important;
-    border-radius: 9px !important;
+    border-radius: 8px !important;
     font-weight: 600 !important;
-    font-size: 0.88rem !important;
-    padding: 0.5rem 1.5rem !important;
-    transition: all 0.2s ease !important;
-    box-shadow: 0 2px 6px rgba(99,102,241,0.25) !important;
-}
-.stButton > button:hover {
-    transform: translateY(-1px) !important;
-    box-shadow: 0 6px 16px rgba(99,102,241,0.35) !important;
-}
+    font-size: 0.84rem !important;
+    padding: 0.45rem 1.4rem !important;
+    transition: background .15s ease, box-shadow .15s ease !important;
+    box-shadow: 0 1px 4px rgba(99,102,241,.25) !important;
+}}
+.stButton > button:hover {{
+    background: {INDIGO_600} !important;
+    box-shadow: 0 4px 14px rgba(99,102,241,.35) !important;
+}}
 
-/* ── Inputs / Selects ─────────────────────────────────────────────────────── */
-[data-testid="stMultiSelect"] [data-baseweb="select"],
-[data-testid="stSelectbox"] [data-baseweb="select"] {
-    border-radius: 9px !important;
-    background: #FFFFFF !important;
-    border: 1px solid #E2E8F0 !important;
-}
+/* ── Inputs ────────────────────────────────────────────────────────────────── */
+[data-baseweb="input"], [data-baseweb="select"] {{
+    border-radius: 8px !important;
+    border-color: {BORDER} !important;
+    background: {BG_CARD} !important;
+    font-size: 0.84rem !important;
+}}
+[data-baseweb="input"]:focus-within,
+[data-baseweb="select"]:focus-within {{
+    border-color: {INDIGO_300} !important;
+    box-shadow: 0 0 0 3px {INDIGO_50} !important;
+}}
 
-/* ── Sliders ──────────────────────────────────────────────────────────────── */
-[data-testid="stSlider"] [data-baseweb="slider"] [role="slider"] {
-    background: #6366F1 !important;
-}
-
-/* ── Subtítulos e headers ─────────────────────────────────────────────────── */
-h1 { font-weight: 800 !important; color: #1E293B !important; }
-h2 { font-weight: 700 !important; color: #1E293B !important; margin-top: 0.5rem !important; }
-h3 { font-weight: 600 !important; color: #334155 !important; }
-
-/* ── Captions ─────────────────────────────────────────────────────────────── */
-[data-testid="stCaptionContainer"] p {
-    color: #64748B !important;
-    font-size: 0.83rem !important;
-}
-
-/* ── Tabs ─────────────────────────────────────────────────────────────────── */
-[data-testid="stTabs"] [role="tab"] {
+/* ── Tags/chips em multiselect ─────────────────────────────────────────────── */
+[data-baseweb="tag"] {{
+    background: {INDIGO_100} !important;
+    color: {INDIGO_700} !important;
+    border-radius: 6px !important;
+    font-size: 0.78rem !important;
     font-weight: 600 !important;
-    font-size: 0.88rem !important;
-    color: #64748B !important;
-}
-[data-testid="stTabs"] [role="tab"][aria-selected="true"] {
-    color: #6366F1 !important;
-    border-bottom-color: #6366F1 !important;
-}
+}}
 
-/* ── Radio buttons ────────────────────────────────────────────────────────── */
-[data-testid="stRadio"] label {
-    font-size: 0.85rem !important;
+/* ── Tipografia ────────────────────────────────────────────────────────────── */
+h1 {{ font-size: 1.5rem  !important; font-weight: 800 !important; color: {TEXT_H} !important; letter-spacing: -0.025em !important; }}
+h2 {{ font-size: 1.0rem  !important; font-weight: 700 !important; color: {TEXT_H} !important; letter-spacing: -0.01em  !important; margin: 0 !important; }}
+h3 {{ font-size: 0.9rem  !important; font-weight: 600 !important; color: {TEXT_B} !important; }}
+p  {{ font-size: 0.875rem !important; color: {TEXT_B} !important; line-height: 1.6 !important; }}
+[data-testid="stCaptionContainer"] p {{
+    color: {TEXT_M} !important;
+    font-size: 0.78rem !important;
+}}
+
+/* ── Radio ─────────────────────────────────────────────────────────────────── */
+[data-testid="stRadio"] label {{
+    font-size: 0.82rem !important;
     font-weight: 500 !important;
-}
+    color: {TEXT_B} !important;
+}}
 </style>
 """
 
 
 def inject_css() -> None:
-    """Injeta o CSS premium globalmente. Chamar no topo de cada página."""
+    """Injeta o CSS do design system. Chamar após set_page_config em cada página."""
     st.markdown(_CSS, unsafe_allow_html=True)
 
 
-# ─── Componentes HTML reutilizáveis ──────────────────────────────────────────
+# ── Componentes de layout ─────────────────────────────────────────────────────
 
 def page_header(title: str, subtitle: str, icon: str = "🧴") -> None:
-    """Banner de cabeçalho com gradiente escuro premium."""
+    """Banner de página com gradiente escuro e borda accent indigo."""
     st.markdown(
-        f"""
-        <div style="
-            background: linear-gradient(135deg, #1E293B 0%, #2D3A4F 60%, #1E293B 100%);
-            padding: 1.75rem 2rem 1.5rem;
-            border-radius: 16px;
-            margin-bottom: 1.75rem;
-            border-left: 4px solid #6366F1;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.12);
-        ">
-            <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:0.5rem;">
-                <span style="font-size:1.6rem;">{icon}</span>
-                <h1 style="
-                    color: #F1F5F9;
-                    margin: 0;
-                    font-size: 1.55rem;
-                    font-weight: 800;
-                    letter-spacing: -0.02em;
-                ">{title}</h1>
+        f"""<div style="
+                background:linear-gradient(135deg,{SIDEBAR_TOP} 0%,#263548 100%);
+                padding:1.5rem 1.75rem 1.25rem;
+                border-radius:14px;
+                margin-bottom:1.75rem;
+                border-left:4px solid {INDIGO_500};
+                box-shadow:0 2px 12px rgba(15,23,42,.12);">
+            <div style="display:flex;align-items:center;gap:.65rem;margin-bottom:.35rem">
+                <span style="font-size:1.4rem;line-height:1">{icon}</span>
+                <h1 style="color:#F1F5F9;margin:0;font-size:1.3rem;font-weight:800;
+                           letter-spacing:-.025em">{title}</h1>
             </div>
-            <p style="
-                color: #94A3B8;
-                margin: 0;
-                font-size: 0.85rem;
-                font-weight: 400;
-                padding-left: 2.4rem;
-            ">{subtitle}</p>
-        </div>
-        """,
+            <p style="color:#94A3B8;margin:0;font-size:.78rem;font-weight:400;
+                      padding-left:2.1rem;line-height:1.5">{subtitle}</p>
+        </div>""",
         unsafe_allow_html=True,
     )
 
 
 def section_header(title: str, subtitle: str = "") -> None:
-    """Cabeçalho de seção com borda esquerda accent."""
-    sub_html = (
-        f'<p style="color:#64748B;font-size:0.8rem;margin:0.25rem 0 0 0;">{subtitle}</p>'
-        if subtitle else ""
-    )
+    """Cabeçalho de seção com linha accent à esquerda."""
+    sub = (f'<p style="color:{TEXT_M};font-size:.75rem;margin:.2rem 0 0 0;'
+           f'font-weight:400">{subtitle}</p>') if subtitle else ""
     st.markdown(
-        f"""
-        <div style="
-            border-left: 3px solid #6366F1;
-            padding-left: 0.9rem;
-            margin-bottom: 1rem;
-        ">
-            <h2 style="
-                color: #1E293B;
-                font-size: 1.1rem;
-                font-weight: 700;
-                margin: 0;
-                letter-spacing: -0.01em;
-            ">{title}</h2>
-            {sub_html}
-        </div>
-        """,
+        f"""<div style="border-left:3px solid {INDIGO_500};
+                        padding:.05rem 0 .05rem .85rem;margin-bottom:.9rem">
+                <h2 style="color:{TEXT_H};font-size:.95rem;font-weight:700;
+                           letter-spacing:-.01em;margin:0">{title}</h2>
+                {sub}
+            </div>""",
         unsafe_allow_html=True,
     )
 
 
-def badge(text: str, color: str = "#6366F1") -> str:
-    """Retorna HTML de uma badge colorida (inline)."""
-    return (
-        f'<span style="'
-        f'background:{color}20;color:{color};'
-        f'padding:0.2rem 0.6rem;border-radius:20px;'
-        f'font-size:0.72rem;font-weight:700;letter-spacing:0.04em;'
-        f'border:1px solid {color}40;'
-        f'">{text}</span>'
-    )
-
-
-def kpi_card(label: str, value: str, delta: str = "", color: str = "#6366F1") -> str:
-    """KPI card HTML para uso em st.markdown(unsafe_allow_html=True)."""
-    delta_html = (
-        f'<p style="color:#64748B;font-size:0.75rem;margin:0.3rem 0 0;">{delta}</p>'
-        if delta else ""
-    )
-    return f"""
-    <div style="
-        background:#FFFFFF;
-        border-radius:14px;
-        padding:1.25rem 1.5rem;
-        border:1px solid #E2E8F0;
-        border-top:3px solid {color};
-        box-shadow:0 1px 3px rgba(0,0,0,0.06);
-    ">
-        <p style="color:#64748B;font-size:0.68rem;font-weight:700;
-                  text-transform:uppercase;letter-spacing:0.08em;margin:0 0 0.5rem;">{label}</p>
-        <p style="color:#1E293B;font-size:2rem;font-weight:800;margin:0;line-height:1.1;">{value}</p>
-        {delta_html}
-    </div>
+def stat_row(*items: tuple[str, str, str]) -> None:
+    """Linha de estatísticas inline: list de (label, value, delta).
+    Exemplo: stat_row(("Total", "114", ""), ("Segurança", "7", "6.1%"))
     """
+    cols = st.columns(len(items))
+    for col, (label, value, delta) in zip(cols, items):
+        col.metric(label, value, delta or None)
 
 
-def alert_card(title: str, body: str, level: str = "danger") -> None:
-    """Card de alerta com cor por nível: danger | warning | success | info."""
-    colors = {
-        "danger":  ("#EF4444", "#FEF2F2", "#FECACA"),
-        "warning": ("#F97316", "#FFF7ED", "#FED7AA"),
-        "success": ("#10B981", "#F0FDF4", "#A7F3D0"),
-        "info":    ("#3B82F6", "#EFF6FF", "#BFDBFE"),
+def alert_card(title: str, body: str, level: str = "info") -> None:
+    """Card de alerta semântico. level: danger | warning | success | info."""
+    _map = {
+        "danger":  (COLOR_DANGER,  "#FEF2F2", "#FECACA"),
+        "warning": (COLOR_WARNING, "#FFFBEB", "#FDE68A"),
+        "success": (COLOR_SUCCESS, "#F0FDF4", "#A7F3D0"),
+        "info":    (INDIGO_500,    "#EEF2FF", "#C7D2FE"),
     }
-    c, bg, border = colors.get(level, colors["info"])
+    c, bg, bd = _map.get(level, _map["info"])
     st.markdown(
-        f"""
-        <div style="
-            background:{bg};
-            border:1px solid {border};
-            border-left:4px solid {c};
-            border-radius:10px;
-            padding:1rem 1.25rem;
-            margin-bottom:0.75rem;
-        ">
-            <p style="color:{c};font-weight:700;font-size:0.88rem;margin:0 0 0.3rem;">{title}</p>
-            <p style="color:#334155;font-size:0.84rem;margin:0;">{body}</p>
-        </div>
-        """,
+        f"""<div style="background:{bg};border:1px solid {bd};border-left:3px solid {c};
+                        border-radius:10px;padding:.85rem 1.1rem;margin-bottom:.6rem">
+                <p style="color:{c};font-weight:700;font-size:.82rem;margin:0 0 .2rem">{title}</p>
+                <p style="color:{TEXT_B};font-size:.82rem;margin:0;line-height:1.5">{body}</p>
+            </div>""",
         unsafe_allow_html=True,
     )
 
 
-# ─── Tema Plotly compartilhado ────────────────────────────────────────────────
+# ── Helpers Plotly ────────────────────────────────────────────────────────────
 
-_PLOTLY_FONT = dict(family="Inter, -apple-system, sans-serif", size=12, color="#334155")
-
-_LAYOUT_BASE: dict[str, Any] = dict(
-    paper_bgcolor="rgba(0,0,0,0)",
-    plot_bgcolor="rgba(0,0,0,0)",
-    font=_PLOTLY_FONT,
-    margin=dict(l=12, r=12, t=36, b=12),
-    legend=dict(
-        bgcolor="rgba(0,0,0,0)",
-        bordercolor="#E2E8F0",
-        borderwidth=1,
-        font=dict(size=11),
-    ),
-    hoverlabel=dict(
-        bgcolor="#1E293B",
-        font_color="#F1F5F9",
-        bordercolor="#1E293B",
-        font_size=12,
-    ),
+_BASE_FONT   = dict(family="Inter, system-ui, sans-serif", size=12, color=TEXT_B)
+_AXIS        = dict(
+    gridcolor="#F1F5F9", linecolor=BORDER,
+    tickfont=dict(size=11, color=TEXT_M),
+    title_font=dict(size=11, color=TEXT_M),
+    showgrid=True, zeroline=False,
 )
-
-_AXIS_STYLE: dict[str, Any] = dict(
-    gridcolor="#F1F5F9",
-    linecolor="#E2E8F0",
-    tickfont=dict(size=11, color="#64748B"),
-    title_font=dict(size=12, color="#64748B"),
-    showgrid=True,
-    zeroline=False,
+_HOVER = dict(
+    bgcolor=TEXT_H, font_color="#F1F5F9",
+    bordercolor=TEXT_H, font_size=12,
 )
 
 
-def apply_chart_theme(fig: Any, title: str = "", height: int = 360) -> Any:
-    """Aplica o tema premium a qualquer figura Plotly e retorna a figura."""
-    layout = dict(
-        **_LAYOUT_BASE,
+def chart_layout(
+    fig: Any,
+    title: str = "",
+    height: int = 320,
+    show_xgrid: bool = False,
+    show_legend: bool = False,
+) -> Any:
+    """Aplica o tema padrão a qualquer figura Plotly. Retorna a figura."""
+    xaxis = {**_AXIS, "showgrid": show_xgrid}
+    fig.update_layout(
         height=height,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=_BASE_FONT,
+        margin=dict(l=0, r=20, t=44 if title else 16, b=0),
+        showlegend=show_legend,
+        legend=dict(
+            bgcolor="rgba(0,0,0,0)", borderwidth=0,
+            font=dict(size=11, color=TEXT_M),
+            orientation="h", y=1.06, x=0,
+        ),
+        hoverlabel=_HOVER,
         title=dict(
             text=title,
-            font=dict(size=14, color="#1E293B", family="Inter, sans-serif"),
-            x=0.01,
-            xanchor="left",
+            font=dict(size=13, color=TEXT_M, family="Inter, sans-serif"),
+            x=0.01, xanchor="left", y=0.98, yanchor="top",
         ) if title else {},
-        xaxis=_AXIS_STYLE,
-        yaxis=_AXIS_STYLE,
+        xaxis={**xaxis, "title": None},
+        yaxis={**_AXIS,  "title": None},
     )
-    fig.update_layout(**layout)
+    return fig
+
+
+def bar_single(fig: Any, color: str = CHART_SINGLE) -> Any:
+    """Aplica cor única e remove bordas em barras."""
+    fig.update_traces(
+        marker_color=color,
+        marker_line_width=0,
+        opacity=0.92,
+        textfont=dict(size=11, color=TEXT_H),
+        textposition="inside",
+        insidetextanchor="end",
+    )
+    return fig
+
+
+def bar_sev(fig: Any) -> Any:
+    """Aplica a paleta canônica de severidade (1→5) em barras."""
+    for i, (sev, cor) in enumerate(SEV_PALETTE.items()):
+        fig.update_traces(
+            selector=dict(name=str(sev)),
+            marker_color=cor,
+            marker_line_width=0,
+        )
     return fig

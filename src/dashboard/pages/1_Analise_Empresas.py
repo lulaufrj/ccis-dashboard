@@ -1,4 +1,4 @@
-"""Análise por Empresas — ranking de risco com score composto (design premium)."""
+"""Análise por Empresas — ranking de risco."""
 
 from __future__ import annotations
 
@@ -6,24 +6,19 @@ import sys
 from pathlib import Path
 
 import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
 
 _ROOT = Path(__file__).resolve().parents[3]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from src.dashboard.components.data_loader import (  # noqa: E402
-    compute_risk_scores,
-    get_categoria_color,
-    load_classificados,
-)
+from src.dashboard.components.data_loader import compute_risk_scores, load_classificados  # noqa: E402
 from src.dashboard.components.detail_renderer import make_title, render_complaint_detail  # noqa: E402
 from src.dashboard.components.styles import (  # noqa: E402
-    alert_card,
-    apply_chart_theme,
-    inject_css,
-    page_header,
-    section_header,
+    CAT_COLORS, SEV_PALETTE, SEV_LABELS, CHART_SEQ,
+    COLOR_DANGER, COLOR_WARNING, COLOR_SUCCESS, TEXT_H, TEXT_M,
+    alert_card, bar_single, chart_layout, inject_css, page_header, section_header,
 )
 
 st.set_page_config(page_title="CCIS — Análise por Empresas", page_icon="📊", layout="wide")
@@ -31,32 +26,34 @@ inject_css()
 
 page_header(
     title="Análise por Empresas",
-    subtitle="Ranking de risco · Score = Σ(peso_categoria × severidade) · Pesos: Segurança 5 · Eficácia 3 · Qualidade 2 · Comercial 0",
+    subtitle=(
+        "Score de risco = Σ(peso × severidade)  ·  "
+        "Pesos: Segurança 5 · Eficácia 3 · Qualidade 2 · Comercial 0"
+    ),
     icon="📊",
 )
 
 df = load_classificados()
-
 if df.empty:
-    alert_card("Sem dados", "Nenhum dado classificado disponível.", level="warning")
+    alert_card("Sem dados", "Nenhum dado disponível.", level="warning")
     st.stop()
 
 scores = compute_risk_scores(df, groupby="empresa")
 
-# ── KPIs de alerta ────────────────────────────────────────────────────────────
-vermelho = (scores["nivel_alerta"].str.contains("Vermelho")).sum()
-amarelo  = (scores["nivel_alerta"].str.contains("Amarelo")).sum()
-padrao   = (scores["nivel_alerta"].str.contains("Padrão")).sum()
+# ── KPIs ──────────────────────────────────────────────────────────────────────
+n_verm = int((scores["nivel_alerta"].str.contains("Vermelho")).sum())
+n_amar = int((scores["nivel_alerta"].str.contains("Amarelo")).sum())
+n_pad  = int((scores["nivel_alerta"].str.contains("Padrão")).sum())
 
 c1, c2, c3, c4 = st.columns(4)
-c1.metric("🔴 Alerta Vermelho", f"{vermelho}", "Score ≥ 15")
-c2.metric("🟡 Alerta Amarelo",  f"{amarelo}",  "Score 8–14")
-c3.metric("🟢 Padrão",          f"{padrao}",   "Score < 8")
-c4.metric("🏢 Empresas monitoradas", f"{len(scores)}")
+c1.metric("Alerta Vermelho  ≥15",  f"{n_verm}")
+c2.metric("Alerta Amarelo  8–14",  f"{n_amar}")
+c3.metric("Padrão  <8",            f"{n_pad}")
+c4.metric("Empresas monitoradas",  f"{len(scores)}")
 
 st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
 
-# ── Tabela ranking ────────────────────────────────────────────────────────────
+# ── Tabela de ranking ─────────────────────────────────────────────────────────
 section_header("Ranking de risco", "Todas as empresas ordenadas por score composto")
 
 st.dataframe(
@@ -65,10 +62,14 @@ st.dataframe(
         "severidade_maxima", "reclamacoes_sev5", "reclamacoes_sev4",
         "score_risco", "nivel_alerta",
     ]].rename(columns={
-        "empresa": "Empresa", "total_reclamacoes": "Total",
-        "severidade_media": "Sev. Média", "severidade_maxima": "Sev. Máx",
-        "reclamacoes_sev5": "Críticas (5)", "reclamacoes_sev4": "Altas (≥4)",
-        "score_risco": "Score", "nivel_alerta": "Alerta",
+        "empresa":           "Empresa",
+        "total_reclamacoes": "Reclamações",
+        "severidade_media":  "Sev. Média",
+        "severidade_maxima": "Sev. Máx.",
+        "reclamacoes_sev5":  "Críticas (5)",
+        "reclamacoes_sev4":  "Altas (≥4)",
+        "score_risco":       "Score",
+        "nivel_alerta":      "Nível",
     }),
     use_container_width=True,
     hide_index=True,
@@ -82,90 +83,100 @@ st.dataframe(
     },
 )
 
-# ── Gráfico top empresas ──────────────────────────────────────────────────────
-st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
-section_header("Top empresas por score", "Barras coloridas por nível de alerta")
+# ── Gráfico horizontal de ranking ─────────────────────────────────────────────
+st.markdown("<div style='height:.5rem'></div>", unsafe_allow_html=True)
+section_header("Top empresas por score", "Colorido por nível de alerta")
 
-top_n = min(10, len(scores))
-top = scores.head(top_n).copy()
+top_n = min(12, len(scores))
+top   = scores.head(top_n).copy()
 
-# Mapeia nível para cor
-_alert_color = {"🔴 Vermelho": "#EF4444", "🟡 Amarelo": "#F97316", "🟢 Padrão": "#10B981"}
-top["cor"] = top["nivel_alerta"].map(
-    lambda x: "#EF4444" if "Vermelho" in x else ("#F97316" if "Amarelo" in x else "#10B981")
-)
+def _alert_cor(label: str) -> str:
+    if "Vermelho" in label: return COLOR_DANGER
+    if "Amarelo"  in label: return COLOR_WARNING
+    return COLOR_SUCCESS
 
-fig_top = px.bar(
-    top.sort_values("score_risco"),
-    x="score_risco", y="empresa",
+top["cor"] = top["nivel_alerta"].apply(_alert_cor)
+
+fig_rank = go.Figure(go.Bar(
+    y=top.sort_values("score_risco")["empresa"],
+    x=top.sort_values("score_risco")["score_risco"],
     orientation="h",
-    text="score_risco",
-    color="nivel_alerta",
-    color_discrete_map={
-        "🔴 Vermelho": "#EF4444",
-        "🟡 Amarelo":  "#F97316",
-        "🟢 Padrão":   "#10B981",
-    },
-    labels={"score_risco": "Score de risco", "empresa": "", "nivel_alerta": "Alerta"},
-)
-fig_top.update_traces(texttemplate="%{text:.1f}", textposition="outside", marker_line_width=0)
-apply_chart_theme(fig_top, height=max(280, top_n * 42))
-fig_top.update_layout(xaxis_title="Score de risco", legend=dict(orientation="h", y=1.08))
-st.plotly_chart(fig_top, use_container_width=True)
+    marker_color=top.sort_values("score_risco")["cor"],
+    marker_line_width=0,
+    text=top.sort_values("score_risco")["score_risco"].round(1),
+    textfont=dict(size=11, color=TEXT_H),
+    textposition="inside",
+    insidetextanchor="end",
+    opacity=0.93,
+))
+chart_layout(fig_rank, title="Score de risco por empresa", height=max(280, top_n * 38), show_xgrid=True)
+fig_rank.update_layout(xaxis_title="Score de risco")
 
-# ── Drill-down por empresa ────────────────────────────────────────────────────
-st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
-section_header("Drill-down por empresa", "Selecione uma empresa para ver todos os eventos")
+# Legenda manual como annotation
+for label, cor in [("Vermelho ≥15", COLOR_DANGER), ("Amarelo 8–14", COLOR_WARNING), ("Padrão <8", COLOR_SUCCESS)]:
+    fig_rank.add_annotation(
+        xref="paper", yref="paper", x=1, y=1,
+        showarrow=False, font=dict(size=10, color=TEXT_M),
+    )
 
-empresas = sorted(df["empresa"].dropna().unique().tolist())
-empresa_sel = st.selectbox("Empresa:", empresas, label_visibility="collapsed")
+st.plotly_chart(fig_rank, use_container_width=True)
+
+# ── Drill-down ────────────────────────────────────────────────────────────────
+st.markdown("<div style='height:.5rem'></div>", unsafe_allow_html=True)
+section_header("Drill-down por empresa", "Detalhamento completo de uma empresa")
+
+empresas_list = sorted(df["empresa"].dropna().unique().tolist())
+empresa_sel   = st.selectbox("Selecione a empresa:", empresas_list, label_visibility="collapsed")
 
 if empresa_sel:
     df_emp = df[df["empresa"] == empresa_sel]
 
-    c_a, c_b, c_c, c_d = st.columns(4)
-    c_a.metric("Reclamações",     len(df_emp))
-    c_b.metric("Sev. Média",      f"{df_emp['severidade'].mean():.2f}")
-    c_c.metric("Sev. Máxima",     int(df_emp["severidade"].max()))
-    c_d.metric("Score de risco",  f"{df_emp['score_individual'].sum():.1f}")
+    ca, cb, cc, cd = st.columns(4)
+    ca.metric("Reclamações",    len(df_emp))
+    cb.metric("Sev. Média",     f"{df_emp['severidade'].mean():.2f}")
+    cc.metric("Sev. Máxima",    int(df_emp["severidade"].max()))
+    cd.metric("Score total",    f"{df_emp['score_individual'].sum():.1f}")
 
-    col_pie, col_sev = st.columns(2)
+    col_pie, col_sb = st.columns(2)
 
+    # Donut por categoria — CAT_COLORS fixas
     with col_pie:
         cat_emp = df_emp["categoria"].value_counts().reset_index()
-        cat_emp.columns = ["categoria", "total"]
+        cat_emp.columns = ["categoria", "n"]
         fig_pie = px.pie(
-            cat_emp,
-            names="categoria", values="total",
-            color="categoria",
-            color_discrete_map={c: get_categoria_color(c) for c in cat_emp["categoria"]},
-            hole=0.5,
+            cat_emp, names="categoria", values="n", hole=0.52,
+            color="categoria", color_discrete_map=CAT_COLORS,
         )
-        fig_pie.update_traces(textinfo="percent+label", textfont_size=11)
-        apply_chart_theme(fig_pie, title="Categorias", height=280)
-        fig_pie.update_layout(showlegend=False, margin=dict(l=8, r=8, t=36, b=8))
+        fig_pie.update_traces(
+            textinfo="percent+label", textfont_size=11,
+            marker=dict(line=dict(color="#F8FAFC", width=2)),
+        )
+        chart_layout(fig_pie, title="Categorias", height=270)
+        fig_pie.update_layout(showlegend=False, margin=dict(l=0, r=0, t=40, b=0))
         st.plotly_chart(fig_pie, use_container_width=True)
 
-    with col_sev:
+    # Barras por severidade — SEV_PALETTE fixas
+    with col_sb:
         sev_emp = df_emp["severidade"].value_counts().sort_index().reset_index()
-        sev_emp.columns = ["severidade", "total"]
-        fig_sev = px.bar(
-            sev_emp, x="severidade", y="total",
-            color="severidade",
-            color_continuous_scale=[
-                [0.0, "#10B981"], [0.25, "#84CC16"],
-                [0.5, "#F59E0B"], [0.75, "#F97316"], [1.0, "#EF4444"],
-            ],
-            text="total",
-        )
-        fig_sev.update_traces(textposition="outside", marker_line_width=0)
-        apply_chart_theme(fig_sev, title="Severidade", height=280)
-        fig_sev.update_layout(coloraxis_showscale=False, xaxis_title="Severidade", showlegend=False)
+        sev_emp.columns = ["sev", "n"]
+        sev_emp["label"] = sev_emp["sev"].map(SEV_LABELS)
+        sev_emp["cor"]   = sev_emp["sev"].map(SEV_PALETTE)
+        fig_sev = go.Figure(go.Bar(
+            x=sev_emp["label"], y=sev_emp["n"],
+            marker_color=sev_emp["cor"],
+            marker_line_width=0,
+            text=sev_emp["n"],
+            textposition="outside",
+            textfont=dict(size=11, color=TEXT_H),
+            opacity=0.93,
+        ))
+        chart_layout(fig_sev, title="Severidade", height=270)
         st.plotly_chart(fig_sev, use_container_width=True)
 
+    # Eventos da empresa
     st.markdown(
-        f"<p style='color:#64748B;font-size:0.82rem;font-weight:600;"
-        f"text-transform:uppercase;letter-spacing:0.05em;margin:1rem 0 0.5rem;'>"
+        f"<p style='color:{TEXT_M};font-size:.72rem;font-weight:700;"
+        f"text-transform:uppercase;letter-spacing:.07em;margin:.75rem 0 .5rem'>"
         f"{len(df_emp)} evento(s) registrado(s)</p>",
         unsafe_allow_html=True,
     )
