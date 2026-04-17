@@ -152,6 +152,18 @@ section[data-testid="stSidebar"] [aria-selected="true"] {{
     border-left: 3px solid {INDIGO_500} !important;
 }}
 
+/* Rótulo "app" (script principal) → "Início" no menu lateral.
+   Streamlit usa o nome do arquivo `app.py`; sobrescrevemos via CSS
+   escondendo o texto original e injetando "Início" no :before. */
+section[data-testid="stSidebar"] [data-testid="stSidebarNav"] ul li:first-child a span {{
+    font-size: 0 !important;
+}}
+section[data-testid="stSidebar"] [data-testid="stSidebarNav"] ul li:first-child a span::before {{
+    content: "Início" !important;
+    font-size: 0.9rem !important;
+    font-weight: 600 !important;
+}}
+
 /* ── Metric cards ──────────────────────────────────────────────────────────── */
 [data-testid="stMetric"] {{
     background: {BG_CARD} !important;
@@ -305,22 +317,24 @@ def inject_css() -> None:
 # ── Componentes de layout ─────────────────────────────────────────────────────
 
 def page_header(title: str, subtitle: str, icon: str = "🧴") -> None:
-    """Banner de página com gradiente escuro e borda accent indigo."""
+    """Banner de página — fundo claro, tipografia de alto contraste,
+    barra accent indigo à esquerda. Design sóbrio para ambiente regulatório."""
     st.markdown(
         f"""<div style="
-                background:linear-gradient(135deg,{SIDEBAR_TOP} 0%,#263548 100%);
-                padding:1.5rem 1.75rem 1.25rem;
+                background:{BG_CARD};
+                padding:1.5rem 1.9rem 1.35rem;
                 border-radius:14px;
                 margin-bottom:1.75rem;
-                border-left:4px solid {INDIGO_500};
-                box-shadow:0 2px 12px rgba(15,23,42,.12);">
-            <div style="display:flex;align-items:center;gap:.65rem;margin-bottom:.35rem">
-                <span style="font-size:1.4rem;line-height:1">{icon}</span>
-                <h1 style="color:#F1F5F9;margin:0;font-size:1.3rem;font-weight:800;
-                           letter-spacing:-.025em">{title}</h1>
+                border:1px solid {BORDER};
+                border-left:5px solid {INDIGO_500};
+                box-shadow:0 1px 3px rgba(15,23,42,.05);">
+            <div style="display:flex;align-items:center;gap:.7rem;margin-bottom:.4rem">
+                <span style="font-size:1.55rem;line-height:1">{icon}</span>
+                <h1 style="color:{TEXT_H};margin:0;font-size:1.55rem;font-weight:800;
+                           letter-spacing:-.025em;line-height:1.2">{title}</h1>
             </div>
-            <p style="color:#94A3B8;margin:0;font-size:.78rem;font-weight:400;
-                      padding-left:2.1rem;line-height:1.5">{subtitle}</p>
+            <p style="color:{TEXT_M};margin:0;font-size:.85rem;font-weight:500;
+                      padding-left:2.35rem;line-height:1.55">{subtitle}</p>
         </div>""",
         unsafe_allow_html=True,
     )

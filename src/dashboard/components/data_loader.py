@@ -176,12 +176,25 @@ def load_classificados() -> pd.DataFrame:
     with open(path, encoding="utf-8") as f:
         raw: list[dict[str, Any]] = json.load(f)
 
+    # Fontes admitidas no dashboard — apenas cosméticos artesanais.
+    # - mercadolivre: já filtrado no ingestor por categoria + palavras-chave
+    # - dou_anvisa: atos regulatórios (contexto de vigilância)
+    # Consumidor.gov.br é excluído por ser majoritariamente composto de
+    # reclamações sobre grandes marcas industriais, fora do escopo artesanal.
+    FONTES_ARTESANAIS = {"mercadolivre", "dou_anvisa"}
+
     rows: list[dict[str, Any]] = []
     skipped_industrial = 0
+    skipped_fonte = 0
     for rec in raw:
         cls = rec.get("classificacao") or {}
         texto = rec.get("texto_anonimizado") or ""
         fonte = rec.get("fonte") or ""
+
+        # Filtro de fonte (foco artesanal)
+        if fonte not in FONTES_ARTESANAIS:
+            skipped_fonte += 1
+            continue
 
         # Extração de empresa: múltiplas estratégias por fonte
         empresa = (
@@ -260,10 +273,11 @@ def load_classificados() -> pd.DataFrame:
         )
 
     df = pd.DataFrame(rows)
-    if skipped_industrial:
+    if skipped_industrial or skipped_fonte:
         import logging
         logging.getLogger(__name__).info(
-            "Filtro industrial: %d registros excluídos, %d mantidos.",
+            "Filtro artesanal: %d fora de fonte, %d industriais excluídos, %d mantidos.",
+            skipped_fonte,
             skipped_industrial,
             len(rows),
         )

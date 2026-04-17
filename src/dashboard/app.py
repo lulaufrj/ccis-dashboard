@@ -31,8 +31,8 @@ inject_css()
 page_header(
     title="Cosmetic Complaint Intelligence System",
     subtitle=(
-        "Monitoramento de reclamações e eventos adversos em cosméticos artesanais  ·  "
-        "Fontes: Consumidor.gov.br + DOU/Anvisa"
+        "Monitoramento de reclamações e eventos adversos em cosméticos artesanais "
+        "no Brasil  ·  Fontes: Mercado Livre (avaliações) + DOU/Anvisa (atos regulatórios)"
     ),
     icon="🧴",
 )
