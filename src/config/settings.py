@@ -42,6 +42,14 @@ class Settings(BaseSettings):
     ckan_base_url: str = "https://dados.mj.gov.br"
     ckan_dataset_id: str = "reclamacoes-do-consumidor-gov-br"
 
+    # Mercado Livre
+    ml_client_id: str = ""
+    ml_client_secret: str = ""
+    ml_access_token: str = ""      # token de usuário (authorization_code)
+    ml_refresh_token: str = ""     # para renovar sem nova autorização manual
+    ml_max_concurrent: int = 10    # conexões simultâneas (respeita rate limit)
+    ml_reviews_por_coleta: int = 5000
+
     model_config = {
         "env_file": str(_ENV_FILE),
         "env_file_encoding": "utf-8",
