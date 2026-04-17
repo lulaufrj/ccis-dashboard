@@ -1,4 +1,4 @@
-"""Alertas — reclamações críticas (severidade 4-5) com destaque visual."""
+"""Alertas — casos críticos e empresas em alerta (design premium)."""
 
 from __future__ import annotations
 
@@ -11,155 +11,134 @@ _ROOT = Path(__file__).resolve().parents[3]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from src.dashboard.components.data_loader import (  # noqa: E402
-    compute_risk_scores,
-    load_classificados,
+from src.dashboard.components.data_loader import compute_risk_scores, load_classificados  # noqa: E402
+from src.dashboard.components.detail_renderer import make_title, render_complaint_detail  # noqa: E402
+from src.dashboard.components.styles import (  # noqa: E402
+    COLORS,
+    alert_card,
+    inject_css,
+    page_header,
+    section_header,
 )
 
 st.set_page_config(page_title="CCIS — Alertas", page_icon="🚨", layout="wide")
+inject_css()
 
-st.title("🚨 Alertas")
-st.caption(
-    "Conforme CLAUDE.md: severidade 4 = reação adversa leve/moderada (ALERTA) · "
-    "severidade 5 = dano à saúde (ALERTA URGENTE)"
+page_header(
+    title="Central de Alertas",
+    subtitle="Severidade 4 = reação adversa leve/moderada · Severidade 5 = dano à saúde (ALERTA URGENTE)",
+    icon="🚨",
 )
 
 df = load_classificados()
 
 if df.empty:
-    st.warning("Nenhum dado disponível.")
+    alert_card("Sem dados", "Nenhum dado disponível.", level="warning")
     st.stop()
 
-# ----------------------------------------------------------------------
-# Contadores de alerta
-# ----------------------------------------------------------------------
-col1, col2, col3 = st.columns(3)
-
-criticos = df[df["severidade"] == 5]
-altos = df[df["severidade"] == 4]
+criticos       = df[df["severidade"] == 5]
+altos          = df[df["severidade"] == 4]
 seguranca_grave = df[(df["categoria"] == "Segurança") & (df["severidade"] >= 4)]
 
-col1.metric("🔴 Críticos (sev 5)", len(criticos))
-col2.metric("🟠 Altos (sev 4)", len(altos))
-col3.metric("⚠️ Segurança Grave", len(seguranca_grave))
+# ── KPIs ──────────────────────────────────────────────────────────────────────
+c1, c2, c3, c4 = st.columns(4)
+c1.metric("🔴 Críticos (sev 5)",  len(criticos))
+c2.metric("🟠 Altos (sev 4)",     len(altos))
+c3.metric("⚠️ Segurança Grave",   len(seguranca_grave))
+c4.metric("📊 Total monitorado",   len(df))
 
-st.divider()
+st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
 
-# ----------------------------------------------------------------------
-# Empresas recorrentes em eventos graves
-# ----------------------------------------------------------------------
-st.subheader("📌 Empresas com Múltiplos Eventos Graves (sev ≥ 4)")
+# ── Empresas em alerta vermelho ───────────────────────────────────────────────
+scores = compute_risk_scores(df, groupby="empresa")
+vermelhos = scores[scores["nivel_alerta"].str.contains("Vermelho")]
+amarelos  = scores[scores["nivel_alerta"].str.contains("Amarelo")]
+
+section_header("🔴 Alerta Vermelho", "Score ≥ 15 — monitoramento imediato recomendado")
+
+if vermelhos.empty:
+    alert_card("Nenhuma empresa em alerta vermelho", "Todas as empresas estão com score abaixo de 15.", level="success")
+else:
+    for _, row in vermelhos.iterrows():
+        alert_card(
+            title=f"🔴 {row['empresa']}",
+            body=(
+                f"Score: <strong>{row['score_risco']:.1f}</strong> · "
+                f"{int(row['total_reclamacoes'])} reclamações · "
+                f"Sev. Máxima: {int(row['severidade_maxima'])} · "
+                f"Críticas (5): {int(row['reclamacoes_sev5'])} · "
+                f"Altas (≥4): {int(row['reclamacoes_sev4'])}"
+            ),
+            level="danger",
+        )
+
+st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
+section_header("🟡 Alerta Amarelo", "Score 8–14 — monitoramento ativo")
+
+if amarelos.empty:
+    alert_card("Nenhuma empresa em alerta amarelo", "Não há empresas com score entre 8 e 14.", level="success")
+else:
+    for _, row in amarelos.iterrows():
+        alert_card(
+            title=f"🟡 {row['empresa']}",
+            body=(
+                f"Score: <strong>{row['score_risco']:.1f}</strong> · "
+                f"{int(row['total_reclamacoes'])} reclamações · "
+                f"Sev. Máxima: {int(row['severidade_maxima'])}"
+            ),
+            level="warning",
+        )
+
+# ── Empresas recorrentes em eventos graves ────────────────────────────────────
+st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
+section_header("Recorrência em eventos graves", "Empresas com 2 ou mais eventos de Segurança sev ≥ 4")
 
 if not seguranca_grave.empty:
     recorrentes = (
         seguranca_grave.groupby("empresa")
         .agg(
             total=("id", "count"),
-            sev_maxima=("severidade", "max"),
-            produtos=("produto", lambda s: ", ".join(sorted(set(s)))),
+            sev_max=("severidade", "max"),
+            produtos=("produto", lambda s: " · ".join(sorted(set(str(x) for x in s if x and x != "Não informado"))[:3])),
         )
         .reset_index()
         .sort_values("total", ascending=False)
     )
-    recorrentes_multiplos = recorrentes[recorrentes["total"] >= 2]
-
-    if not recorrentes_multiplos.empty:
-        st.error(
-            f"⚠️ {len(recorrentes_multiplos)} empresa(s) com 2+ eventos graves de segurança — "
-            "monitoramento prioritário recomendado."
-        )
+    multiplos = recorrentes[recorrentes["total"] >= 2]
+    if not multiplos.empty:
         st.dataframe(
-            recorrentes_multiplos.rename(
-                columns={
-                    "empresa": "Empresa",
-                    "total": "Eventos Graves",
-                    "sev_maxima": "Sev. Máx",
-                    "produtos": "Produtos",
-                }
-            ),
-            width="stretch",
-            hide_index=True,
+            multiplos.rename(columns={
+                "empresa": "Empresa", "total": "Eventos Graves",
+                "sev_max": "Sev. Máx", "produtos": "Produtos / Tipos",
+            }),
+            use_container_width=True, hide_index=True,
         )
     else:
-        st.success("Nenhuma empresa com recorrência (2+) em eventos graves de segurança.")
-else:
-    st.info("Nenhum evento grave de segurança registrado.")
+        alert_card("Sem recorrência grave", "Nenhuma empresa com 2+ eventos graves de segurança.", level="success")
 
-st.divider()
-
-# ----------------------------------------------------------------------
-# Alertas vermelhos (score de risco)
-# ----------------------------------------------------------------------
-st.subheader("🔴 Empresas em Alerta Vermelho (Score ≥ 15)")
-scores = compute_risk_scores(df, groupby="empresa")
-vermelhos = scores[scores["nivel_alerta"].str.contains("Vermelho")]
-
-if vermelhos.empty:
-    st.success("Nenhuma empresa em alerta vermelho no momento.")
-else:
-    for _, row in vermelhos.iterrows():
-        st.error(
-            f"**{row['empresa']}** — Score: {row['score_risco']:.2f} · "
-            f"{row['total_reclamacoes']} reclamações · "
-            f"Sev. Média: {row['severidade_media']:.2f} · "
-            f"Sev. Máx: {int(row['severidade_maxima'])}"
-        )
-
-st.divider()
-
-# ----------------------------------------------------------------------
-# Casos críticos (sev 5) — lista completa
-# ----------------------------------------------------------------------
-st.subheader("🚨 Casos Críticos (severidade 5)")
+# ── Casos críticos (sev 5) ────────────────────────────────────────────────────
+st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
+section_header("🚨 Casos Críticos — severidade 5", "Máxima prioridade de atenção")
 
 if criticos.empty:
-    st.success("Nenhum caso crítico registrado.")
+    alert_card("Nenhum caso crítico", "Não há eventos com severidade 5 registrados.", level="success")
 else:
-    for _, row in criticos.iterrows():
-        with st.container(border=True):
-            col_a, col_b = st.columns([3, 1])
-            with col_a:
-                st.markdown(f"### {row['produto']}")
-                st.markdown(f"**Empresa:** {row['empresa']}")
-                st.markdown(f"**Categoria:** {row['categoria']}")
-                st.markdown(f"**Justificativa:** {row['justificativa']}")
-                with st.expander("Ver texto completo"):
-                    st.text(row["texto"])
-            with col_b:
-                st.metric("Severidade", "5 / 5")
-                st.metric("Confiança", f"{row['confianca'] * 100:.0f}%")
-                st.markdown(f"**Fonte:** `{row['fonte']}`")
-                st.markdown(f"**ID:** `{row['id']}`")
+    for _, row in criticos.sort_values("confianca", ascending=False).iterrows():
+        with st.expander(make_title(row)):
+            render_complaint_detail(row)
 
-st.divider()
+# ── Todos os eventos graves (sev ≥ 4) não-comerciais ─────────────────────────
+st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
+section_header("Todos os eventos graves (sev ≥ 4)", "Excluindo Comerciais — ordenados por severidade")
 
-# ----------------------------------------------------------------------
-# Alertas amarelos
-# ----------------------------------------------------------------------
-st.subheader("🟡 Empresas em Alerta Amarelo (Score 8-14)")
-amarelos = scores[scores["nivel_alerta"].str.contains("Amarelo")]
+graves_nc = df[(df["severidade"] >= 4) & (df["categoria"] != "Comercial")].sort_values(
+    ["severidade", "confianca"], ascending=[False, False]
+)
 
-if amarelos.empty:
-    st.info("Nenhuma empresa em alerta amarelo.")
+if graves_nc.empty:
+    alert_card("Sem eventos graves não-comerciais", "Nenhum evento de segurança/qualidade/eficácia com sev ≥ 4.", level="info")
 else:
-    st.dataframe(
-        amarelos[
-            [
-                "empresa",
-                "total_reclamacoes",
-                "severidade_media",
-                "severidade_maxima",
-                "score_risco",
-            ]
-        ].rename(
-            columns={
-                "empresa": "Empresa",
-                "total_reclamacoes": "Total",
-                "severidade_media": "Sev. Média",
-                "severidade_maxima": "Sev. Máx",
-                "score_risco": "Score",
-            }
-        ),
-        width="stretch",
-        hide_index=True,
-    )
+    st.caption(f"{len(graves_nc)} evento(s) encontrado(s)")
+    for _, row in graves_nc.iterrows():
+        with st.expander(make_title(row)):
+            render_complaint_detail(row)
